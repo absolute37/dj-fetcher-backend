@@ -1,10 +1,12 @@
 import { Elysia, t } from "elysia";
-// @ts-ignore
-import FlacMetadata from "flac-metadata";
+import ffmpegPath from "ffmpeg-static";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import fs from "fs";
+import path from "path";
 
-const { FlacParser, FlacBuilder } = FlacMetadata;
 type PatchFlacBody = {
-  trackFileUrl: string;
+  trackFileUrl?: string;
   title?: string;
   artist?: string;
   album?: string;
@@ -19,37 +21,39 @@ export default new Elysia()
 
     if (!trackFileUrl) {
       set.status = 400;
-      return { error: "Missing apiUrl in body" };
+      return { error: "Missing trackFileUrl in body" };
     }
 
     try {
-      // 1) ดาวน์โหลดไฟล์ต้นฉบับ
+      // 1) ดาวน์โหลดไฟล์ต้นฉบับไปเป็น temp
+      const tempInput = path.join("/tmp", `input-${Date.now()}.flac`);
+      const tempOutput = path.join("/tmp", `output-${Date.now()}.flac`);
+
       const res = await fetch(trackFileUrl);
       if (!res.ok) throw new Error(`Failed to fetch file: ${res.status}`);
-      const arrayBuffer = await res.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      fs.writeFileSync(tempInput, buffer);
 
-      // 2) ตรวจว่าเป็น FLAC
-      if (!(uint8[0] === 0x66 && uint8[1] === 0x4c && uint8[2] === 0x61)) {
-        set.status = 400;
-        return { error: "File is not FLAC" };
-      }
+      // 2) ใช้ ffmpeg set Vorbis Comment
+      const metadataArgs: string[] = [];
+      if (title) metadataArgs.push("-metadata", `TITLE=${title}`);
+      if (artist) metadataArgs.push("-metadata", `ARTIST=${artist}`);
+      if (album) metadataArgs.push("-metadata", `ALBUM=${album}`);
+      if (releaseDate) metadataArgs.push("-metadata", `DATE=${releaseDate}`);
+      // แปลง execFile เป็น promise-based function
+      const execFileAsync = promisify(execFile);
+      await execFileAsync(ffmpegPath as string, [
+        "-i",
+        tempInput,
+        ...metadataArgs,
+        "-y", // overwrite
+        tempOutput,
+      ]);
 
-      // 3) ปรับ Vorbis Comment
-      const parser = new FlacParser();
-      parser.parse(uint8);
+      // 3) อ่านไฟล์ output
+      const finalFile = fs.readFileSync(tempOutput);
 
-      const builder = new FlacBuilder();
-      builder.setVorbisComment({
-        TITLE: title || "",
-        ARTIST: artist || "",
-        ALBUM: album || "",
-        DATE: releaseDate || "",
-      });
-
-      const finalFile = builder.build(uint8);
-
-      // 4) ส่งกลับเป็น response
+      // 4) ส่งกลับ response
       set.headers = {
         "Content-Type": "audio/flac",
         "Content-Disposition": `attachment; filename="${
@@ -57,7 +61,11 @@ export default new Elysia()
         }.flac"`,
       };
 
-      return new Response(finalFile);
+      // 5) ลบ temp files
+      fs.unlinkSync(tempInput);
+      fs.unlinkSync(tempOutput);
+
+      return finalFile;
     } catch (err: any) {
       console.error(err);
       set.status = 500;
