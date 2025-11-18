@@ -30,7 +30,6 @@ export default new Elysia()
     console.log("releaseDate", releaseDate);
 
     try {
-      // 1) ดาวน์โหลดไฟล์ต้นฉบับไปเป็น temp
       const tempInput = path.join("/tmp", `input-${Date.now()}.flac`);
       const tempOutput = path.join("/tmp", `output-${Date.now()}.flac`);
 
@@ -39,13 +38,11 @@ export default new Elysia()
       const buffer = Buffer.from(await res.arrayBuffer());
       fs.writeFileSync(tempInput, buffer);
 
-      // 2) ใช้ ffmpeg set Vorbis Comment
       const metadataArgs: string[] = [];
       if (title) metadataArgs.push("-metadata", `TITLE=${title}`);
       if (artist) metadataArgs.push("-metadata", `ARTIST=${artist}`);
       if (album) metadataArgs.push("-metadata", `ALBUM=${album}`);
       if (releaseDate) metadataArgs.push("-metadata", `DATE=${releaseDate}`);
-      // แปลง execFile เป็น promise-based function
       const execFileAsync = promisify(execFile);
       await execFileAsync(ffmpegPath as string, [
         "-i",
@@ -55,18 +52,12 @@ export default new Elysia()
         tempOutput,
       ]);
 
-      // 3) อ่านไฟล์ output
       const finalFile = fs.readFileSync(tempOutput);
-
-      // 4) ส่งกลับ response
+      const safeFilename = encodeURIComponent(`${title || "track"}.flac`);
       set.headers = {
         "Content-Type": "audio/flac",
-        "Content-Disposition": `attachment; filename="${
-          title || "track"
-        }.flac"`,
+        "Content-Disposition": `attachment; filename*=UTF-8''${safeFilename}`,
       };
-
-      // 5) ลบ temp files
       fs.unlinkSync(tempInput);
       fs.unlinkSync(tempOutput);
 
