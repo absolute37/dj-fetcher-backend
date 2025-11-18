@@ -23,6 +23,11 @@ export default new Elysia()
       set.status = 400;
       return { error: "Missing trackFileUrl in body" };
     }
+    console.log("trackFileUrl", trackFileUrl);
+    console.log("title", title);
+    console.log("artist", artist);
+    console.log("album", album);
+    console.log("releaseDate", releaseDate);
 
     try {
       // 1) ดาวน์โหลดไฟล์ต้นฉบับไปเป็น temp
