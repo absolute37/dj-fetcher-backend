@@ -3,11 +3,19 @@ import { Elysia, t } from "elysia";
 import FlacMetadata from "flac-metadata";
 
 const { FlacParser, FlacBuilder } = FlacMetadata;
+type PatchFlacBody = {
+  trackFileUrl: string;
+  title?: string;
+  artist?: string;
+  album?: string;
+  releaseDate?: string;
+};
 
 export default new Elysia()
   .get("/", () => "Hello Vercel Function")
   .post("/api/patch-flac", async ({ body, set }) => {
-    const { trackFileUrl, title, artist, album, releaseDate } = body;
+    const { trackFileUrl, title, artist, album, releaseDate } =
+      body as PatchFlacBody;
 
     if (!trackFileUrl) {
       set.status = 400;
