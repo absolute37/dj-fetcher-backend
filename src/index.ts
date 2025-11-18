@@ -1,6 +1,8 @@
 import { Elysia, t } from "elysia";
 // @ts-ignore
-import { FlacParser, FlacBuilder } from "flac-metadata";
+import FlacMetadata from "flac-metadata";
+
+const { FlacParser, FlacBuilder } = FlacMetadata;
 
 export default new Elysia()
   .get("/", () => "Hello Vercel Function")
